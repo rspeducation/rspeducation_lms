@@ -1,0 +1,199 @@
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Azure-themed design system with custom colors and gradients */
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+
+    --primary: 213 93% 47%;
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+
+    --accent: 213 93% 47%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 213 93% 47%;
+
+    --radius: 0.5rem;
+
+    /* Custom Azure colors */
+    --azure-blue: 213 93% 47%;
+    --azure-light: 213 100% 90%;
+    --azure-dark: 213 93% 37%;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 213 93% 57%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 213 93% 57%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+}
+
+@layer utilities {
+  .azure-gradient {
+    background: linear-gradient(135deg, hsl(213 93% 47%) 0%, hsl(213 93% 57%) 100%);
+  }
+  
+  .azure-gradient-light {
+    background: linear-gradient(135deg, hsl(213 100% 95%) 0%, hsl(213 100% 90%) 100%);
+  }
+  
+  .text-azure {
+    color: hsl(213 93% 47%);
+  }
+  
+  .bg-azure {
+    background-color: hsl(213 93% 47%);
+  }
+  
+  .border-azure {
+    border-color: hsl(213 93% 47%);
+  }
+  
+  .animate-fade-in {
+    animation: fadeIn 0.6s ease-out;
+  }
+  
+  .animate-slide-up {
+    animation: slideUp 0.8s ease-out;
+  }
+}
+
+/* Interview-specific tokens and utilities */
+@layer base {
+  :root {
+    /* Warning / Success tokens used by interview UI */
+    --warning: 34 100% 50%; /* orange-ish hue (H S L components for hsl(var())) */
+    --warning-foreground: 0 0% 100%;
+    --success: 142 75% 33%; /* green */
+    --success-foreground: 210 40% 98%;
+
+    /* Interview background */
+    --interview-bg: 215 20% 98%; /* very light gray */
+
+    /* Card gradient for interview panels */
+    --gradient-primary-from: 213 93% 47%;
+    --gradient-primary-to: 213 93% 37%;
+  }
+
+  .bg-interview-bg {
+    background-color: hsl(var(--interview-bg));
+  }
+
+  .bg-gradient-primary {
+    background: linear-gradient(90deg, hsl(var(--gradient-primary-from)) 0%, hsl(var(--gradient-primary-to)) 100%);
+  }
+
+  .bg-gradient-card {
+    background: linear-gradient(180deg, hsl(var(--card)) 0%, color-mix(in srgb, hsl(var(--card)) 96%, transparent 4%));
+    border-radius: 0.75rem;
+  }
+
+  /* Primary interview glow/shadows used on buttons/cards */
+  .shadow-interview-md {
+    box-shadow: 0 6px 18px rgba(44,92,230,0.06), 0 2px 6px rgba(16,24,40,0.04);
+  }
+
+  .shadow-interview-lg {
+    box-shadow: 0 10px 40px rgba(44,92,230,0.08), 0 6px 18px rgba(16,24,40,0.06);
+  }
+
+  .shadow-interview-glow {
+    box-shadow: 0 6px 30px rgba(59,130,246,0.18), 0 1px 0 rgba(255,255,255,0.5) inset;
+  }
+
+  /* Simple success/warning utilities (used by Badges & Buttons) */
+  .bg-warning {
+    background-color: hsl(var(--warning));
+  }
+  .text-warning-foreground, .text-warning-foreground * {
+    color: hsl(var(--warning-foreground)) !important;
+  }
+
+  .text-success {
+    color: hsl(var(--success));
+  }
+  .text-success * {
+    color: hsl(var(--success)) !important;
+  }
+
+  /* Make muted-foreground slightly darker on interview page for readability */
+  .bg-interview-bg .text-muted-foreground {
+    color: hsl(215 12% 45%) !important;
+  }
+
+  /* CTA sizes & spacing tweaks for interview navigation
+  .min-w-[140px] {
+    min-width: 140px;
+  } */
+} 
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
