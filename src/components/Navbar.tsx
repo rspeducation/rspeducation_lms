@@ -38,7 +38,7 @@ const Navbar = () => {
             <Link to="/" className="flex items-center space-x-2">
               <img src="./rapeducation.png" alt="RSP Education" className="h-10 w-10" />
               <div>
-                <span className="text-xl font-bold text-azure">RSP Education</span>
+                <span className="text-xl font-bold text-azure">RSP Educations</span>
                 <p className="text-xs text-gray-600">Learn Toaday, Lead Tomorrow</p>
               </div>
             </Link>

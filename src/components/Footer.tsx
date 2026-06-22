@@ -20,13 +20,13 @@ const Footer = () => {
               We are offering coursess Computer Basics, Advace Excel, Tally With GST, Web Development, App Development, Python Full Stack, Microsoft Azure & More
             </p>
             <div className="flex space-x-4">
-              <a href="#" className="text-gray-400 hover:text-blue-400" aria-label="Instagram">
+              <a href="https://www.instagram.com/rspeducations/" className="text-gray-400 hover:text-blue-400" aria-label="Instagram">
                 <Instagram className="h-5 w-5" />
               </a>
               <a href="#" className="text-gray-400 hover:text-blue-400" aria-label="LinkedIn">
                 <Linkedin className="h-5 w-5" />
               </a>
-              <a href="#" className="text-gray-400 hover:text-blue-400" aria-label="YouTube">
+              <a href="https://www.youtube.com/@rspeducations/" className="text-gray-400 hover:text-blue-400" aria-label="YouTube">
                 <Youtube className="h-5 w-5" />
               </a>
             </div>

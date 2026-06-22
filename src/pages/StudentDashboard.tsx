@@ -201,7 +201,7 @@ if (!user || loadingProfile) {
               <Button
                 className="w-full"
                 variant="outline"
-                onClick={() => navigate('/student/ResumeBuilder')}
+                onClick={() => navigate('/student/ViewAssigments')}
               >
                 View Assignments
               </Button>

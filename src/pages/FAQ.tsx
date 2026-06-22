@@ -10,55 +10,108 @@ import {
 
 const FAQ = () => {
   const faqs = [
-    {
-      question: "What are the prerequisites for Azure courses?",
-      answer: "For Azure Fundamentals (AZ-900), no prior experience is required. For advanced courses like Administrator (AZ-104) or Architect (AZ-305), basic understanding of cloud concepts and networking is recommended. We provide foundation modules to help beginners get started."
-    },
-    {
-      question: "How long does it take to complete a course?",
-      answer: "Course duration varies: Azure Fundamentals takes 4 weeks, Administrator and DevOps courses take 6 weeks, and Architect courses take 8 weeks. We also offer accelerated weekend batches for working professionals."
-    },
-    {
-      question: "Do you provide hands-on practice?",
-      answer: "Yes! Every course includes extensive hands-on labs using real Azure environments. Students work on live projects, deploy resources, and gain practical experience that's essential for both certification and job readiness."
-    },
-    {
-      question: "What is your placement assistance process?",
-      answer: "We provide 100% placement assistance including resume building, interview preparation, mock interviews, and direct connections with our hiring partners. Our placement team works with you until you secure a suitable position."
-    },
-    {
-      question: "Are the classes online or offline?",
-      answer: "We offer both online and offline training options. Online classes are conducted  Zoom with recorded sessions for revision. Offline classes are held at our Madakasira center with limited batch sizes for personalized attention."
-    },
-    {
-      question: "What is the success rate of your students?",
-      answer: "Our students have a 95% certification success rate and 200+ placements with packages ranging from ₹7.5 LPA to ₹25 LPA. We maintain high standards through quality training and comprehensive support."
-    },
-    {
-      question: "Do you provide study materials and resources?",
-      answer: "Yes, we provide comprehensive study materials including course PDFs, practice tests, lab guides, recorded sessions, and access to Azure documentation. All materials are regularly updated in student dashboard."
-    },
-    {
-      question: "What are the batch timings?",
-      answer: "Regular batches run Monday-Friday 7:00-8:00 PM, with offline sessions 10:00 AM-12:00 PM. We also offer flexible timings for working professionals and students in different time zones."
-    },
-    {
-      question: "Is there any financial assistance or EMI options?",
-      answer: "We offer flexible payment options including installment plans and early bird discounts. Contact our counselors to discuss payment plans that suit your budget and needs."
-    },
-    {
-      question: "How do I access course materials after enrollment?",
-      answer: "Once enrolled, you'll receive login credentials for our student portal where you can access all course materials, recorded sessions, assignments, and track your progress. The portal remains accessible throughout your course duration."
-    },
-    {
-      question: "What support is available during the course?",
-      answer: "Students get 24/7 support through our dedicated WhatsApp groups, email support, one-on-one doubt clearing sessions, and regular mentoring calls. Our instructors are always available to help with technical questions."
-    },
-    {
-      question: "Do you help with Azure certification exam registration?",
-      answer: "Yes, we guide students through the entire certification process including exam registration, scheduling, and provide vouchers for practice tests. We also offer exam-specific preparation sessions before your certification date."
-    }
-  ];
+  {
+    question: "What is RSP Educations?",
+    answer:
+      "RSP Educations is a training institute that provides career-oriented courses in Computer Basics, Advanced Excel, Tally Prime & GST, Web Development, Python Full Stack, Microsoft Azure, App Development, Data Science, Spoken English, Communication Skills, and AI Prompt Engineering.",
+  },
+  {
+    question: "Where is RSP Educations located?",
+    answer:
+      "RSP Educations is located at KL Road, Mukkidipeta, Hindupuram, Andhra Pradesh - 515201.",
+  },
+  {
+    question: "What courses are available at RSP Educations?",
+    answer:
+      "We offer Computer Basics, Advanced Excel, Tally Prime & GST, Web Development, Python Full Stack Development, Microsoft Azure, App Development, Data Science, Spoken English, Communication Skills, and AI Prompt Engineering.",
+  },
+  {
+    question: "Are any courses offered free of cost?",
+    answer:
+      "Yes. Selected courses such as Spoken English, Communication Skills, and AI Prompt Engineering may be offered free during special admission campaigns.",
+  },
+  {
+    question: "Do you provide certificates after course completion?",
+    answer:
+      "Yes, course completion certificates are provided to eligible students after successfully completing their training.",
+  },
+  {
+    question: "Is there any age limit to join the courses?",
+    answer:
+      "No. Students, job seekers, working professionals, and entrepreneurs can join our courses regardless of age.",
+  },
+  {
+    question: "Do you provide practical training?",
+    answer:
+      "Yes. We focus on practical learning, hands-on exercises, assignments, and real-world projects.",
+  },
+  {
+    question: "Are live projects included in the training?",
+    answer:
+      "Yes. Students work on live projects to gain industry experience and improve their practical skills.",
+  },
+  {
+    question: "Do you provide internship support?",
+    answer:
+      "Yes. Internship guidance and support are provided for eligible students.",
+  },
+  {
+    question: "Is placement support available?",
+    answer:
+      "Yes. We provide placement assistance, interview preparation, resume guidance, and career support.",
+  },
+  {
+    question: "Can beginners join technical courses?",
+    answer:
+      "Absolutely. Our courses are designed for both beginners and experienced learners.",
+  },
+  {
+    question: "Do I need a computer to learn these courses?",
+    answer:
+      "Having a laptop or desktop is recommended, but we also provide guidance for students who are just starting.",
+  },
+  {
+    question: "How long are the courses?",
+    answer:
+      "Course duration varies depending on the program. Contact our team for the latest batch schedules and durations.",
+  },
+  {
+    question: "Are online classes available?",
+    answer:
+      "Yes. Online learning options may be available for selected courses.",
+  },
+  {
+    question: "What is AI Prompt Engineering?",
+    answer:
+      "AI Prompt Engineering teaches students how to effectively communicate with AI tools like ChatGPT and create prompts for productivity, learning, and business applications.",
+  },
+  {
+    question: "Who can join Spoken English and Communication Skills courses?",
+    answer:
+      "Students, job seekers, graduates, professionals, and anyone looking to improve communication skills can join.",
+  },
+  {
+    question: "What career opportunities are available after completing the courses?",
+    answer:
+      "Students can pursue careers such as Data Entry Operator, Accountant, Web Developer, Python Developer, Cloud Engineer, App Developer, Data Analyst, and IT Support Executive.",
+  },
+  {
+    question: "How can I register for a course?",
+    answer:
+      "You can contact us through phone, email, or visit our institute to complete the admission process.",
+  },
+  {
+    question: "How can I contact RSP Educations?",
+    answer:
+      "Phone: +91 7569790229, +91 9059384664, +91 7386372008 | Email: info@rspeducations.com | Website: rspeducations.com",
+  },
+  {
+    question: "Why should I choose RSP Educations?",
+    answer:
+      "RSP Educations provides Practical Training, Live Projects, Internship Support, Industry-Relevant Courses, Certificates, Career Guidance, Placement Assistance, and Affordable Learning Opportunities.",
+  },
+];
+
 
   return (
     <div className="min-h-screen">
@@ -111,7 +164,7 @@ const FAQ = () => {
               onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#E06A1F'}
               onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#F97923'}
             >
-              Call Us: +91 8500086257
+              Call Us: +91 7569790229
             </a>
             <a
               href="mailto:support@rspeducation.com"
