@@ -13,7 +13,7 @@ type Payload = {
 };
 
 async function sendWithResend(p: Payload) {
-//   const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
+  //   const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
   if (!RESEND_API_KEY) throw new Error("Missing RESEND_API_KEY");
 
   const html = `

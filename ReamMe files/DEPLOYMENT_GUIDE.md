@@ -41,6 +41,122 @@
 
 ---
 
+## ▲ **Deploy to Vercel**
+
+> **Note:** If your React app is hosted on [Vercel](https://vercel.com?utm_source=chatgpt.com), you **usually do not need the GitHub Pages SPA routing script**.
+
+### **The Problem: React Router + Vercel 404 on Refresh**
+
+React Router routes work fine when navigating _inside_ the app. But when you **refresh** a page like:
+
+```
+https://yourdomain.com/dashboard
+```
+
+you get a **404 Not Found** or Vercel error page — because Vercel tries to find a file at that path, which doesn't exist.
+
+---
+
+### **✅ Correct Fix: `vercel.json` Rewrite Rule**
+
+A `vercel.json` file has already been added to the project root. It contains:
+
+```json
+{
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
+```
+
+This tells Vercel to serve `index.html` for all routes, letting React Router handle navigation client-side. **Redeploy after adding this file.**
+
+---
+
+### **Step 1: Build Your Project**
+
+```bash
+npm run build
+```
+
+### **Step 2: Deploy to Vercel**
+
+**Option A — Vercel CLI:**
+```bash
+npm install -g vercel
+vercel --prod
+```
+
+**Option B — Vercel Dashboard (Drag & Drop):**
+1. Go to [vercel.com/new](https://vercel.com/new)
+2. Import your Git repository **or** drag & drop the `dist` folder
+3. Set **Framework Preset** to `Vite`
+4. Click **Deploy**
+
+### **Step 3: Configure Environment Variables**
+
+1. Go to your **Vercel Dashboard** → your project → **Settings** → **Environment Variables**
+2. Add:
+   ```
+   VITE_SUPABASE_URL=https://kaewhoozzlvtxeafxzcj.supabase.co
+   VITE_SUPABASE_ANON_KEY=<your-anon-key>
+   ```
+3. Click **Save** and **Redeploy**
+
+### **Step 4: Update Supabase Settings**
+
+1. Go to **Supabase Dashboard** → **Authentication** → **URL Configuration**
+2. Set:
+   - **Site URL:** `https://your-project.vercel.app`
+   - **Redirect URLs:** `https://your-project.vercel.app/**`
+
+---
+
+### **Router Setup (Vite + React Router)**
+
+Ensure your app uses `BrowserRouter` (already correct for Vercel with the `vercel.json` fix):
+
+```jsx
+import { BrowserRouter } from "react-router-dom";
+
+function App() {
+  return (
+    <BrowserRouter>
+      {/* your routes */}
+    </BrowserRouter>
+  );
+}
+```
+
+### **Alternative: HashRouter (No Server Config Needed)**
+
+If you prefer not to use `vercel.json`, switch to `HashRouter`:
+
+```jsx
+import { HashRouter } from "react-router-dom";
+
+<HashRouter>
+  <App />
+</HashRouter>
+```
+
+URLs become `https://yourdomain.com/#/dashboard` — refreshes never break because the `#` fragment is never sent to the server.
+
+---
+
+### **Vercel Pre-Deployment Checklist**
+
+- [ ] ✅ `vercel.json` present in project root with rewrite rule
+- [ ] ✅ Build successful (`npm run build`)
+- [ ] ✅ Environment variables set in Vercel dashboard
+- [ ] ✅ Supabase Site URL and Redirect URLs updated
+- [ ] ✅ Page refresh on `/dashboard` or other deep routes works correctly
+
+---
+
 ## 🏠 **Local Development Setup**
 
 ### **Step 1: Fix Database Issues**
