@@ -28,6 +28,10 @@ import StudentInterviews from "./pages/StudentInterviews";
 import AdminManagement from './pages/AdminManagement';
 import AdminPlaced from './pages/AdminPlacements';
 import StudentEnrollmentPage from "./pages/StudentEnrollmentPage";
+import AddAssignment from "./pages/AddAssignment";
+import StudentViewAssignments from "./pages/StudentViewAssignments";
+import AdminFeeManagement from "./pages/AdminFeeManagement";
+import StudentFeeManagement from "./pages/StudentFeeManagement";
 import NotFound from "./pages/NotFound";
 
 // Import your new ProtectedAdminRoute
@@ -85,7 +89,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
     isJoinPage ||
     isLoginPage ||
     isAdminLoginPage ||
-    isProtectedLearningPage || isInterviewpage ;
+    isProtectedLearningPage || isInterviewpage;
 
   const hideNavbar =
     isLoginPage || isInterviewpage;
@@ -108,12 +112,12 @@ const App = () => (
       <BrowserRouter>
         <AuthProvider>
           <Layout>
-              <BackButtonHandler />
+            <BackButtonHandler />
             <Routes>
               {/* Public routes */}
               {/* <Route path="/" element={<Home />} /> */}
-            <Route path="/" element={<RootRedirector />} />
-            <Route path="/home" element={<Home />} />
+              <Route path="/" element={<RootRedirector />} />
+              <Route path="/home" element={<Home />} />
 
               <Route path="/about" element={<About />} />
               <Route path="/courses" element={<Courses />} />
@@ -121,95 +125,95 @@ const App = () => (
               <Route path="/contact" element={<Contact />} />
               <Route path="/faq" element={<FAQ />} />
               <Route path="/login" element={<Login />} />
-              <Route path="/DemoAdminLogin" element={<DemoAdminLogin/>} />
+              <Route path="/DemoAdminLogin" element={<DemoAdminLogin />} />
               <Route path="/Enrollment_form" element={<StudentEnrollmentPage />} />
               {/* <Route path="/Admin/student_joins" element={<StudentJoinAdminPage />} /> */}
               <Route path="/copyright-policy" element={<CopyrightPolicy />} />
-              <Route path="/privacy-policy" element={<PrivacyPolicy />} />  
+              <Route path="/privacy-policy" element={<PrivacyPolicy />} />
               <Route path="/terms-of-service" element={<TermsAndConditions />} />
 
 
-                    <Route
-                      path="/rspai"
-                      element={
-                        <ProtectedStudentRoute>
-                          <Landing />
-                        </ProtectedStudentRoute>
-                      }
-                    />
+              <Route
+                path="/rspai"
+                element={
+                  <ProtectedStudentRoute>
+                    <Landing />
+                  </ProtectedStudentRoute>
+                }
+              />
 
-                    <Route
-                      path="/interview"
-                      element={
-                        <ProtectedStudentRoute>
-                          <Index />
-                        </ProtectedStudentRoute>
-                      }
-                    />
+              <Route
+                path="/interview"
+                element={
+                  <ProtectedStudentRoute>
+                    <Index />
+                  </ProtectedStudentRoute>
+                }
+              />
 
-                    <Route
-                      path="/azure-networking"
-                      element={
-                        <ProtectedStudentRoute>
-                          <AzureNetworking />
-                        </ProtectedStudentRoute>
-                      }
-                    />
+              <Route
+                path="/azure-networking"
+                element={
+                  <ProtectedStudentRoute>
+                    <AzureNetworking />
+                  </ProtectedStudentRoute>
+                }
+              />
 
-                    <Route
-                      path="/azure-iaas"
-                      element={
-                        <ProtectedStudentRoute>
-                          <AzureIaaS />
-                        </ProtectedStudentRoute>
-                      }
-                    />
+              <Route
+                path="/azure-iaas"
+                element={
+                  <ProtectedStudentRoute>
+                    <AzureIaaS />
+                  </ProtectedStudentRoute>
+                }
+              />
 
-                    <Route
-                      path="/azure-paas"
-                      element={
-                        <ProtectedStudentRoute>
-                          <AzurePaaS />
-                        </ProtectedStudentRoute>
-                      }
-                    />
+              <Route
+                path="/azure-paas"
+                element={
+                  <ProtectedStudentRoute>
+                    <AzurePaaS />
+                  </ProtectedStudentRoute>
+                }
+              />
 
-                    <Route
-                      path="/azure-saas"
-                      element={
-                        <ProtectedStudentRoute>
-                          <AzureSaaS />
-                        </ProtectedStudentRoute>
-                      }
-                    />
+              <Route
+                path="/azure-saas"
+                element={
+                  <ProtectedStudentRoute>
+                    <AzureSaaS />
+                  </ProtectedStudentRoute>
+                }
+              />
 
-                    <Route
-                      path="/azure-devops"
-                      element={
-                        <ProtectedStudentRoute>
-                          <AzureDevOps />
-                        </ProtectedStudentRoute>
-                      }
-                    />
+              <Route
+                path="/azure-devops"
+                element={
+                  <ProtectedStudentRoute>
+                    <AzureDevOps />
+                  </ProtectedStudentRoute>
+                }
+              />
 
-                    <Route
-                      path="/complete-interview"
-                      element={
-                        <ProtectedStudentRoute>
-                          <CompleteInterview />
-                        </ProtectedStudentRoute>
-                      }
-                    />
+              <Route
+                path="/complete-interview"
+                element={
+                  <ProtectedStudentRoute>
+                    <CompleteInterview />
+                  </ProtectedStudentRoute>
+                }
+              />
 
-                    {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-                    <Route
-                      path=""
-                      element={
-                        <ProtectedStudentRoute>
-                          <NotFounds />
-                        </ProtectedStudentRoute>
-                      }
-                    />
+              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+              <Route
+                path=""
+                element={
+                  <ProtectedStudentRoute>
+                    <NotFounds />
+                  </ProtectedStudentRoute>
+                }
+              />
 
 
 
@@ -264,19 +268,40 @@ const App = () => (
                   <BatchManagement />
                 </ProtectedAdminRoute>
               } />
-              
+
               <Route path="/admin/queries" element={
                 <ProtectedAdminRoute>
                   <UserQueries />
                 </ProtectedAdminRoute>
               } />
 
-        {/* Student routes (protected) */}
+              <Route path="/admin/Assignment" element={
+                <ProtectedAdminRoute>
+                  <AddAssignment />
+                </ProtectedAdminRoute>
+              } />
+
+              <Route path="/admin/FeeManagement" element={
+                <ProtectedAdminRoute>
+                  <AdminFeeManagement />
+                </ProtectedAdminRoute>
+              } />
+
+              {/* Student routes (protected) */}
               <Route
                 path="/student/dashboard"
                 element={
                   <ProtectedStudentRoute>
                     <StudentDashboard />
+                  </ProtectedStudentRoute>
+                }
+              />
+
+              <Route
+                path="/student/ViewAssigments"
+                element={
+                  <ProtectedStudentRoute>
+                    <StudentViewAssignments />
                   </ProtectedStudentRoute>
                 }
               />
@@ -329,6 +354,15 @@ const App = () => (
                 element={
                   <ProtectedStudentRoute>
                     <StudentInterviews />
+                  </ProtectedStudentRoute>
+                }
+              />
+
+              <Route
+                path="/student/FeeManagement"
+                element={
+                  <ProtectedStudentRoute>
+                    <StudentFeeManagement />
                   </ProtectedStudentRoute>
                 }
               />

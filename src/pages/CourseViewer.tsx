@@ -402,9 +402,9 @@ const CourseViewer: React.FC = () => {
             <span>Previous</span>
           </Button>
 
-          <Button onClick={() => window.open('https://interview-rsp-ai.netlify.app', '_blank')} className="flex items-center space-x-2 bg-green-600 hover:bg-green-700 w-full sm:w-auto">
+          <Button onClick={() => window.open('/student/ViewAssigments', '_blank')} className="flex items-center space-x-2 bg-green-600 hover:bg-green-700 w-full sm:w-auto">
             <ExternalLink className="h-4 w-4" />
-            <span>Mock Test</span>
+            <span>Assignments</span>
           </Button>
 
           <Button variant="outline" onClick={handleNext} disabled={currentIndex === courseContent.length - 1} className="flex items-center space-x-2 w-full sm:w-auto">
@@ -414,7 +414,7 @@ const CourseViewer: React.FC = () => {
         </div>
       </main>
 
-      {/* Mobile main content */}
+      {/* --------------------------Mobile main content ------------------------------------ */}
       <main className="md:hidden bg-gray-50 overflow-y-auto p-4 sm:p-6 min-h-screen">
         <div className="flex justify-between items-center mb-4">
           <h1 className="text-xl sm:text-2xl font-bold text-gray-900">{currentContent.title}</h1>
@@ -510,10 +510,11 @@ const CourseViewer: React.FC = () => {
             <span>Previous</span>
           </Button>
 
-          <Button onClick={() => window.open('https://azure.rspeducation.in/MockTest/', '_blank')} className="flex items-center space-x-2 bg-green-600 hover:bg-green-700 w-full sm:w-auto">
+          <Button onClick={() => window.open('/student/ViewAssigments', '_blank')} className="flex items-center space-x-2 bg-green-600 hover:bg-green-700 w-full sm:w-auto">
             <ExternalLink className="h-4 w-4" />
-            <span>Mock Test</span>
+            <span>Assignments</span>
           </Button>
+
 
           <Button variant="outline" onClick={handleNext} disabled={currentIndex === courseContent.length - 1} className="flex items-center space-x-2 w-full sm:w-auto">
             <span>Next</span>

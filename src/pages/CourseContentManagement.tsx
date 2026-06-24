@@ -13,23 +13,20 @@ import { supabase } from "@/lib/supabase";
 import ReactQuill from "react-quill";
 import "react-quill/dist/quill.snow.css";
 
-type Batch = {
-  id: string;
-  name: string;
-  start_date?: string | null;
-  created_at?: string;
-};
+type Batch = { id: string; name: string; start_date?: string | null; created_at?: string };
+type Subject = { id: string; name: string };
 
 type CourseFile = { name: string; url: string };
 
 type ContentRow = {
   id: string;
   batch_id: string;
+  subject_id: string | null;
   title: string;
   video_url: string;
   description: string | null;
   questions: string | null;
-  file_url: string | null; // JSON array [{name,url}]
+  file_url: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -37,6 +34,7 @@ type ContentRow = {
 type ContentUI = {
   id: string;
   batch_id: string;
+  subject_id: string | null;
   title: string;
   video_url: string;
   description: string;
@@ -50,6 +48,7 @@ function toUI(r: ContentRow): ContentUI {
   return {
     id: r.id,
     batch_id: r.batch_id,
+    subject_id: r.subject_id ?? null,
     title: r.title,
     video_url: r.video_url,
     description: r.description ?? "",
@@ -96,12 +95,17 @@ const CourseContentManagement: React.FC = () => {
   const [isAdding, setIsAdding] = useState(false);
   const [editing, setEditing] = useState<ContentUI | null>(null);
 
+  // Subjects for selected batch
+  const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [filterSubjectId, setFilterSubjectId] = useState<string>('all');
+
   // Form state
   const [title, setTitle] = useState("");
   const [videoUrl, setVideoUrl] = useState("");
   const [description, setDescription] = useState("");
   const [questions, setQuestions] = useState("");
   const [files, setFiles] = useState<CourseFile[]>([]);
+  const [formSubjectId, setFormSubjectId] = useState<string>('');
 
   // Guard + load batches
   useEffect(() => {
@@ -124,6 +128,16 @@ const CourseContentManagement: React.FC = () => {
     }
     setBatches(data ?? []);
   }, [toast]);
+
+  const loadSubjects = useCallback(async (batchId: string) => {
+    const { data } = await supabase
+      .from('subjects')
+      .select('id, name')
+      .eq('batch_id', batchId)
+      .order('name');
+    setSubjects((data as Subject[]) ?? []);
+    setFilterSubjectId('all');
+  }, []);
 
   const loadContent = useCallback(async (batchId: string) => {
     const { data, error } = await supabase
@@ -160,6 +174,7 @@ const CourseContentManagement: React.FC = () => {
     setDescription("");
     setQuestions("");
     setFiles([]);
+    setFormSubjectId('');
     setIsAdding(true);
   };
 
@@ -170,6 +185,7 @@ const CourseContentManagement: React.FC = () => {
     setDescription(c.description);
     setQuestions(c.questions);
     setFiles(c.files);
+    setFormSubjectId(c.subject_id ?? '');
     setIsAdding(true);
   };
 
@@ -181,6 +197,7 @@ const CourseContentManagement: React.FC = () => {
     setDescription("");
     setQuestions("");
     setFiles([]);
+    setFormSubjectId('');
   };
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -210,6 +227,7 @@ const CourseContentManagement: React.FC = () => {
 
     const payload = {
       batch_id: selectedBatch.id,
+      subject_id: formSubjectId || null,
       title: title.trim(),
       video_url: videoUrl.trim(),
       description: description || null,
@@ -261,57 +279,45 @@ const CourseContentManagement: React.FC = () => {
 
   const BatchGrid = useMemo(() => (
     <div className="max-w-7xl mx-auto p-6">
-      {/* <div className="flex items-left  mb-6"> */}
-              <div className="bg-white shadow-sm border-b mb-6">
+      <div className="bg-white shadow-sm border-b mb-6">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-3">
-              <Button
-                variant="ghost"
-                onClick={() => navigate('/admin/dashboard')}
-                className="flex items-center space-x-2"
-              >
+              <Button variant="ghost" onClick={() => navigate('/admin/dashboard')} className="flex items-center space-x-2">
                 <ArrowLeft className="h-4 w-4" />
-                <span> Back</span>
+                <span>Back</span>
               </Button>
-              {/* <Calendar className="h-8 w-8 text-blue-600" /> */}
               <div>
-                
-                <h1 className="text-xl font-bold text-gray-900">Batch Management</h1>
-                <p className="text-sm text-gray-600">Manage student batches wise</p>
+                <h1 className="text-xl font-bold text-gray-900">Course Content</h1>
+                <p className="text-sm text-gray-600">Select a batch to manage its content</p>
               </div>
             </div>
           </div>
         </div>
       </div>
-      
 
       {batches.length === 0 ? (
         <Card>
-          <CardContent className="py-10 text-center text-gray-500">
-            No batches found
-          </CardContent>
+          <CardContent className="py-10 text-center text-gray-500">No batches found</CardContent>
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {batches.map(b => (
             <Card key={b.id} className="hover:shadow-md transition cursor-pointer"
-              onClick={async () => { setSelectedBatch(b); await loadContent(b.id); }}>
+              onClick={async () => { setSelectedBatch(b); await loadContent(b.id); await loadSubjects(b.id); }}>
               <CardHeader>
                 <CardTitle className="text-lg">{b.name}</CardTitle>
                 <CardDescription>
                   {b.start_date ? `Starts on ${new Date(b.start_date).toLocaleDateString('en-GB')}` : 'Start date not set'}
                 </CardDescription>
               </CardHeader>
-              <CardContent className="text-sm text-gray-600">
-                Click to manage content
-              </CardContent>
+              <CardContent className="text-sm text-gray-600">Click to manage content</CardContent>
             </Card>
           ))}
         </div>
       )}
     </div>
-  ), [batches, loadContent]);
+  ), [batches, loadContent, loadSubjects, navigate]);
 
   const ContentView = useMemo(() => {
     if (!selectedBatch) return null;
@@ -320,15 +326,42 @@ const CourseContentManagement: React.FC = () => {
     return (
       <div className="flex h-screen overflow-hidden">
         {/* Sidebar */}
-        <div className={`fixed md:static top-0 left-0 h-full w-64 bg-white border-r shadow-lg z-30 transform transition-transform duration-300 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} md:translate-x-0`}>
-          <div className="p-4 flex justify-between items-center border-b">
-            <h2 className="font-bold text-lg">Contents</h2>
-            <button className="md:hidden text-gray-600" onClick={() => setSidebarOpen(false)}>
-              <X className="h-5 w-5" />
-            </button>
+        <div className={`fixed md:static top-0 left-0 h-full w-64 bg-white border-r shadow-lg z-30 transform transition-transform duration-300 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} md:translate-x-0 flex flex-col`}>
+          <div className="p-4 border-b">
+            <div className="flex justify-between items-center mb-3">
+              <h2 className="font-bold text-lg">Contents</h2>
+              <button className="md:hidden text-gray-600" onClick={() => setSidebarOpen(false)}>
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            {/* Subject filter */}
+            {subjects.length > 0 && (
+              <div className="space-y-1">
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Filter by Subject</p>
+                <button
+                  onClick={() => setFilterSubjectId('all')}
+                  className={`w-full text-left text-xs px-2 py-1 rounded font-medium transition ${
+                    filterSubjectId === 'all' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100'
+                  }`}
+                >
+                  All Subjects
+                </button>
+                {subjects.map((s) => (
+                  <button
+                    key={s.id}
+                    onClick={() => setFilterSubjectId(s.id)}
+                    className={`w-full text-left text-xs px-2 py-1 rounded font-medium transition ${
+                      filterSubjectId === s.id ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100'
+                    }`}
+                  >
+                    {s.name}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
-          <div className="overflow-y-auto h-[calc(100%-3rem)] p-2 space-y-2">
-            {items.map((c) => (
+          <div className="overflow-y-auto flex-1 p-2 space-y-2">
+            {items.filter((c) => filterSubjectId === 'all' || c.subject_id === filterSubjectId).map((c) => (
               <Card
                 key={c.id}
                 onClick={() => { setSelected(c); setSidebarOpen(false); }}
@@ -383,6 +416,21 @@ const CourseContentManagement: React.FC = () => {
                     <Label>Title</Label>
                     <Input value={title} onChange={(e) => setTitle(e.target.value)} />
                   </div>
+
+                  {/* Subject selector */}
+                  {subjects.length > 0 && (
+                    <div>
+                      <Label>Subject (optional)</Label>
+                      <select
+                        value={formSubjectId}
+                        onChange={(e) => setFormSubjectId(e.target.value)}
+                        className="w-full mt-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                      >
+                        <option value="">— No subject —</option>
+                        {subjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                      </select>
+                    </div>
+                  )}
 
                   <div>
                     <Label>Video Link</Label>
@@ -522,7 +570,7 @@ const CourseContentManagement: React.FC = () => {
         </div>
       </div>
     );
-  }, [selectedBatch, items, selected, sidebarOpen, isAdding, editing, title, videoUrl, description, questions, files]);
+  }, [selectedBatch, items, subjects, filterSubjectId, selected, sidebarOpen, isAdding, editing, title, videoUrl, description, questions, files, formSubjectId, startAdd, startEdit, remove, resetForm, save, setSidebarOpen, setSelected]);
 
   if (!selectedBatch) return BatchGrid;
   return ContentView;

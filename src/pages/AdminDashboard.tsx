@@ -181,7 +181,7 @@ const AdminDashboard: React.FC = () => {
                 <Award className="h-5 w-5 text-purple-600" />
                 <span>Add Assignments </span>
               </CardTitle>
-              <CardDescription>Add assignment for Batch wise</CardDescription>
+              <CardDescription>Batch-wise assignments & deadline control</CardDescription>
             </CardHeader>
             <CardContent>
               <Button className="w-full" variant="outline" onClick={() => navigate('/admin/Assignment')}>
@@ -190,7 +190,22 @@ const AdminDashboard: React.FC = () => {
             </CardContent>
           </Card>
 
-                    {/* Admin Management Section */}
+          <Card className="hover:shadow-md transition-shadow cursor-pointer">
+            <CardHeader>
+              <CardTitle className="flex items-center space-x-2">
+                <Award className="h-5 w-5 text-purple-600" />
+                <span>Fee Managaement </span>
+              </CardTitle>
+              <CardDescription>Batch-wise Fee Records</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button className="w-full" variant="outline" onClick={() => navigate('/admin/FeeManagement')}>
+                Manage Fee Records
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Admin Management Section */}
           <Card className="hover:shadow-md transition-shadow cursor-pointer">
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
@@ -220,7 +235,7 @@ const AdminDashboard: React.FC = () => {
               </Button>
             </CardContent>
           </Card>
-          
+
           <Card className="hover:shadow-md transition-shadow cursor-pointer">
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">

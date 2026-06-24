@@ -14,7 +14,7 @@ type StudentProfile = {
   id: string;
   name: string;
   email: string;
-  course: string | null;       
+  course: string | null;
   batchName?: string | null;
   batch?: string | null;
   auth_user_id?: string;
@@ -29,7 +29,7 @@ const StudentDashboard: React.FC = () => {
   const [batchId, setBatchId] = useState<string | null>(null);
   const [loadingProfile, setLoadingProfile] = useState<boolean>(false);
 
-  
+
 
   // LOCALSTORAGE AUTH CHECK
   useEffect(() => {
@@ -94,9 +94,9 @@ const StudentDashboard: React.FC = () => {
   }, [studentProfile]);
 
   // Use skeleton loader until user/profile are ready
-if (!user || loadingProfile) {
-  return <AppSkeleton variant="dashboard" gridCount={4} />;
-}
+  if (!user || loadingProfile) {
+    return <AppSkeleton variant="dashboard" gridCount={4} />;
+  }
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -187,14 +187,14 @@ if (!user || loadingProfile) {
             </CardContent>
           </Card>
 
-                    <Card className="hover:shadow-md transition-shadow cursor-pointer">
+          <Card className="hover:shadow-md transition-shadow cursor-pointer">
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
                 <FileText className="h-5 w-5 text-green-600" />
                 <span>Assignments</span>
               </CardTitle>
               <CardDescription>
-                
+                View subjects wise assignment portal
               </CardDescription>
             </CardHeader>
             <CardContent>
