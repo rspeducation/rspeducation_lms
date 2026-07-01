@@ -208,6 +208,29 @@ const StudentDashboard: React.FC = () => {
             </CardContent>
           </Card>
 
+
+          <Card className="hover:shadow-md transition-shadow cursor-pointer">
+            <CardHeader>
+              <CardTitle className="flex items-center space-x-2">
+                <FileText className="h-5 w-5 text-green-600" />
+                <span>Fee Details</span>
+              </CardTitle>
+              <CardDescription>
+                fee details for your course
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button
+                className="w-full"
+                variant="outline"
+                onClick={() => navigate('/Student/FeeManagement')}
+              >
+                Fee Details
+              </Button>
+            </CardContent>
+          </Card>
+
+
           {/* Resume Builder */}
           <Card className="hover:shadow-md transition-shadow cursor-pointer">
             <CardHeader>

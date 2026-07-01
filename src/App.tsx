@@ -64,6 +64,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
 
   // Existing conditions
   const isAdminRoute = path.startsWith("/admin");
+  const isLoginRoute = path.startsWith("/login")
   const isStudentRoute = path.startsWith("/student");
   const isJoinPage = path === "/join";
   const isLoginPage = path === "/Enrollment_form";
@@ -86,6 +87,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
   const hideFooter =
     isAdminRoute ||
     isStudentRoute ||
+    isLoginRoute ||
     isJoinPage ||
     isLoginPage ||
     isAdminLoginPage ||

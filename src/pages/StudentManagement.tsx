@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Plus, Edit, Trash2, Search, Users, ArrowLeft, UserPlus, Calendar } from 'lucide-react';
+import { Plus, Edit, Trash2, Search, Users, ArrowLeft, UserPlus, Calendar, IndianRupee } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -80,6 +80,7 @@ const StudentManagement: React.FC = () => {
     email: '',
     phone: '',
     course: '',
+    total_course_fee: '',
   });
   const navigate = useNavigate();
   const { batchName } = useParams();
@@ -232,7 +233,7 @@ const StudentManagement: React.FC = () => {
       setSaving(true);
 
       // 1) Generate 8-char Student ID from DB
-      const { data: codeRes, error: codeErr } = await supabase.rpc('gen_student_code');
+      const { data: codeRes, error: codeErr } = await supabase.rpc('gen_rsp_student_code');
       if (codeErr || !codeRes) throw new Error(codeErr?.message || 'Failed to generate Student ID');
       const studentCode: string = codeRes;
 
@@ -262,7 +263,7 @@ const StudentManagement: React.FC = () => {
 
       // 5) Insert student row with both batch name (legacy) and batch_id (FK)
       const today = new Date().toISOString().slice(0, 10);
-      const { error: stuErr } = await supabase.from('students').insert([{
+      const { data: stuData, error: stuErr } = await supabase.from('students').insert([{
         user_id: uid,
         name: formData.name.trim(),
         email: formData.email.trim(),
@@ -273,8 +274,19 @@ const StudentManagement: React.FC = () => {
         enrollment_date: today,
         status: 'active',
         student_code: studentCode,
-      }]);
+      }]).select('id').single();
       if (stuErr) throw stuErr;
+
+      // 6) Update the fee_record auto-created by the DB trigger (trg_auto_fee_record)
+      //    The trigger already inserted a row with total_fee=0 — we just update the amount.
+      const totalFee = parseFloat(formData.total_course_fee);
+      if (!isNaN(totalFee) && totalFee > 0) {
+        const { error: feeErr } = await supabase
+          .from('fee_records')
+          .update({ total_fee: totalFee })
+          .eq('student_id', stuData.id);
+        if (feeErr) throw feeErr;
+      }
 
       toast({
         title: 'Student Added',
@@ -282,7 +294,7 @@ const StudentManagement: React.FC = () => {
         variant: 'default',
       });
 
-      setFormData({ name: '', email: '', phone: '', course: '' });
+      setFormData({ name: '', email: '', phone: '', course: '', total_course_fee: '' });
       setIsAddDialogOpen(false);
       await loadStudents();
     } catch (err: any) {
@@ -535,6 +547,29 @@ const StudentManagement: React.FC = () => {
                         required
                       />
                     </div>
+                    <div>
+                      <Label htmlFor="total_course_fee" className="flex items-center gap-1">
+                        <IndianRupee className="h-3.5 w-3.5 text-emerald-600" />
+                        Total Course Fee (₹)
+                        <span className="text-red-500">*</span>
+                      </Label>
+                      <div className="relative mt-1">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-semibold text-base">₹</span>
+                        <Input
+                          id="total_course_fee"
+                          name="total_course_fee"
+                          type="number"
+                          min="1"
+                          step="1"
+                          className="pl-8 font-semibold"
+                          value={formData.total_course_fee}
+                          onChange={(e) => setFormData(s => ({ ...s, total_course_fee: e.target.value }))}
+                          placeholder="e.g. 50000"
+                          required
+                        />
+                      </div>
+                      <p className="text-xs text-gray-400 mt-1">Fee record is created automatically. Installments can be generated from Fee Management.</p>
+                    </div>
                     <div className="flex justify-end space-x-2">
                       <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)} disabled={saving}>
                         Cancel
@@ -553,28 +588,28 @@ const StudentManagement: React.FC = () => {
               <Card><CardContent className="p-4"><div className="flex items-center justify-between"><div><p className="text-sm text-gray-600">Inactive Students</p><p className="text-2xl font-bold text-red-600">{getSelectedBatchStats().inactive}</p></div><Users className="h-8 w-8 text-red-600" /></div></CardContent></Card>
             </div>
 
-          <div className="flex mb-6 items-center">
-  {/* Search bar takes full width, except button */}
-  <div className="relative flex-1">
-    <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-    <Input
-      placeholder="Search by name, email, or student code..."
-      className="pl-10 w-full"
-      value={searchTerm}
-      onChange={(e) => setSearchTerm(e.target.value)}
-    />
-  </div>
-  {/* Button floats right, margin-left */}
-  <Button
-    onClick={handleDownloadBatchExcel}
-    variant="outline"
-    className="ml-4"
-  >
-    Download Excel
-  </Button>
-</div>
+            <div className="flex mb-6 items-center">
+              {/* Search bar takes full width, except button */}
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                <Input
+                  placeholder="Search by name, email, or student code..."
+                  className="pl-10 w-full"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
+              {/* Button floats right, margin-left */}
+              <Button
+                onClick={handleDownloadBatchExcel}
+                variant="outline"
+                className="ml-4"
+              >
+                Download Excel
+              </Button>
+            </div>
 
-           
+
 
             <Card>
               <CardHeader>

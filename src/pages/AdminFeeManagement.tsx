@@ -4,7 +4,8 @@ import {
   ArrowLeft, BadgeDollarSign, ClipboardList, CreditCard,
   Download, History, IndianRupee, Loader2, Plus, Printer,
   Search, User, X, CheckCircle, Clock, AlertCircle,
-  Receipt, Eye,
+  Receipt, Eye, ChevronRight, Filter, Banknote, FileText,
+  RefreshCw,
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -315,6 +316,592 @@ const PaymentLogsPanel: React.FC<{
   );
 };
 
+// ─── Student Status Pill ──────────────────────────────────────────────────────
+function StudentStatusPill({ status }: { status: FeeRecord['status'] }) {
+  if (status === 'paid') {
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500 text-white">
+        <CheckCircle className="h-2.5 w-2.5" /> PAID
+      </span>
+    );
+  }
+  if (status === 'partial') {
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-400 text-white">
+        <Clock className="h-2.5 w-2.5" /> PARTIAL
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-500 text-white">
+      <AlertCircle className="h-2.5 w-2.5" /> UNPAID
+    </span>
+  );
+}
+
+// ─── Generate Invoice Modal ───────────────────────────────────────────────────
+const GenerateInvoiceModal: React.FC<{
+  open: boolean;
+  onClose: () => void;
+  batches: Batch[];
+  admins: AdminRow[];
+  adminInfo: { admin_id: string; name: string } | null;
+  preSelectedBatch: Batch | null;
+  onSaved: () => void;
+  onPreview: (inv: InvoiceData) => void;
+}> = ({ open, onClose, batches, admins, adminInfo, preSelectedBatch, onSaved, onPreview }) => {
+  const { toast } = useToast();
+
+  // Step: 'batch' | 'student' | 'form'
+  const [step, setStep] = useState<'batch' | 'student' | 'form'>('student');
+  const [selBatch, setSelBatch] = useState<Batch | null>(null);
+  const [students, setStudents] = useState<FeeRecord[]>([]);
+  const [loadingStudents, setLoadingStudents] = useState(false);
+  const [selStudent, setSelStudent] = useState<FeeRecord | null>(null);
+  const [nextInstallment, setNextInstallment] = useState(1);
+  const [invoiceNo, setInvoiceNo] = useState('');
+  const [transferId, setTransferId] = useState('');
+  const [receivedByAdminId, setReceivedByAdminId] = useState('');
+  const [form, setForm] = useState({ amount: '', bank_name: '', payment_date: new Date().toISOString().slice(0, 10), notes: '' });
+  const [saving, setSaving] = useState(false);
+  const [studentSearch, setStudentSearch] = useState('');
+  const [studentFilter, setStudentFilter] = useState<'all' | 'paid' | 'partial' | 'unpaid'>('all');
+
+  // Reset on open
+  useEffect(() => {
+    if (!open) return;
+    setInvoiceNo(genInvoiceNo());
+    setTransferId(genTransferId());
+    setReceivedByAdminId('');
+    setForm({ amount: '', bank_name: '', payment_date: new Date().toISOString().slice(0, 10), notes: '' });
+    setSelStudent(null);
+    setStudentSearch('');
+    setStudentFilter('all');
+    if (preSelectedBatch) {
+      setSelBatch(preSelectedBatch);
+      setStep('student');
+    } else {
+      setSelBatch(null);
+      setStep('batch');
+    }
+  }, [open, preSelectedBatch]);
+
+  // Load students when batch changes
+  useEffect(() => {
+    if (!selBatch) { setStudents([]); return; }
+    setLoadingStudents(true);
+    setSelStudent(null);
+    supabase.from('fee_records')
+      .select('id, student_id, batch_id, total_fee, paid_amount, students(student_code, users(name)), batches(name)')
+      .eq('batch_id', selBatch.id)
+      .then(({ data, error }) => {
+        if (!error) {
+          setStudents(((data as any[]) ?? []).map((r) => {
+            const paid = r.paid_amount ?? 0, total = r.total_fee ?? 0, pending = Math.max(0, total - paid);
+            const status: FeeRecord['status'] = paid >= total && total > 0 ? 'paid' : paid > 0 ? 'partial' : 'unpaid';
+            return { id: r.id, student_id: r.student_id, student_name: r.students?.users?.name ?? 'Unknown', student_code: r.students?.student_code ?? '—', batch_id: r.batch_id, batch_name: r.batches?.name ?? '—', total_fee: total, paid_amount: paid, pending_amount: pending, status };
+          }));
+        }
+        setLoadingStudents(false);
+      });
+  }, [selBatch]);
+
+  // Load installment count when student changes
+  useEffect(() => {
+    if (!selStudent) { setNextInstallment(1); return; }
+    supabase.from('fee_payments').select('id', { count: 'exact', head: true }).eq('fee_record_id', selStudent.id)
+      .then(({ count }) => setNextInstallment((count ?? 0) + 1));
+  }, [selStudent]);
+
+  const filteredStudents = useMemo(() => {
+    let list = students;
+    if (studentFilter !== 'all') list = list.filter(s => s.status === studentFilter);
+    if (studentSearch.trim()) {
+      const q = studentSearch.toLowerCase();
+      list = list.filter(s => s.student_name.toLowerCase().includes(q) || s.student_code.toLowerCase().includes(q));
+    }
+    return list;
+  }, [students, studentFilter, studentSearch]);
+
+  const studentCounts = useMemo(() => ({
+    all: students.length,
+    paid: students.filter(s => s.status === 'paid').length,
+    partial: students.filter(s => s.status === 'partial').length,
+    unpaid: students.filter(s => s.status === 'unpaid').length,
+  }), [students]);
+
+  const handleSave = async (withPreview: boolean) => {
+    if (!selStudent || !adminInfo) return;
+    const amount = parseFloat(form.amount);
+    if (!amount || amount <= 0) { toast({ title: 'Enter a valid amount', variant: 'destructive' }); return; }
+    if (!receivedByAdminId) { toast({ title: 'Select the admin who received cash', variant: 'destructive' }); return; }
+    const receivedAdmin = admins.find(a => a.admin_id === receivedByAdminId);
+    try {
+      setSaving(true);
+      const { error: payErr } = await supabase.from('fee_payments').insert([{
+        fee_record_id: selStudent.id, invoice_no: invoiceNo, transfer_id: transferId,
+        installment_no: nextInstallment, amount,
+        bank_name: form.bank_name.trim() || null,
+        received_by: receivedAdmin?.display_name ?? receivedByAdminId,
+        received_by_admin_id: receivedByAdminId,
+        payment_date: form.payment_date,
+        notes: form.notes.trim() || null,
+        added_by_admin_id: adminInfo.admin_id, added_by_admin_name: adminInfo.name,
+      }]);
+      if (payErr) throw payErr;
+      await supabase.from('fee_records').update({ paid_amount: selStudent.paid_amount + amount }).eq('id', selStudent.id);
+      toast({ title: '✅ Invoice Saved', description: `${invoiceNo} | Installment #${nextInstallment}` });
+      if (withPreview) {
+        onPreview({
+          invoice_no: invoiceNo, transfer_id: transferId, installment_no: nextInstallment,
+          student: selStudent, amount, bank_name: form.bank_name || 'Cash (Offline)',
+          received_by_admin_name: receivedAdmin?.display_name ?? receivedByAdminId,
+          received_by_admin_id: receivedByAdminId,
+          recorded_by_admin_name: adminInfo.name,
+          payment_date: form.payment_date, notes: form.notes,
+        });
+      }
+      onSaved();
+      onClose();
+    } catch (err: any) {
+      toast({ title: 'Error', description: err?.message, variant: 'destructive' });
+    } finally { setSaving(false); }
+  };
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-2 sm:p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[97vh] flex flex-col overflow-hidden">
+
+        {/* ── Modal Header ── */}
+        <div className="bg-gradient-to-r from-blue-800 to-blue-600 text-white px-6 py-4 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-xl bg-white/20 flex items-center justify-center">
+              <Receipt className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold leading-tight">Generate Fee Invoice</h2>
+              <p className="text-blue-200 text-xs mt-0.5">
+                {selBatch ? `Batch: ${selBatch.name}` : 'Select a batch to begin'} · {INSTITUTE.name}
+              </p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-2 rounded-xl hover:bg-white/20 transition">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {/* ── Body: Three-column layout ── */}
+        <div className="flex flex-1 overflow-hidden min-h-0">
+
+          {/* ════ COL 1: Batch Selector ════ */}
+          <div className="w-52 border-r bg-slate-50 flex flex-col shrink-0">
+            <div className="px-3 py-3 border-b bg-white">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Batches</p>
+            </div>
+            <div className="flex-1 overflow-y-auto p-2 space-y-1">
+              {batches.map(b => (
+                <button
+                  key={b.id}
+                  onClick={() => { setSelBatch(b); setStep('student'); }}
+                  className={`w-full text-left px-3 py-2.5 rounded-xl border text-sm font-medium transition-all flex items-center justify-between gap-2 ${selBatch?.id === b.id
+                    ? 'bg-blue-600 text-white border-blue-600 shadow-md'
+                    : 'bg-white border-slate-200 hover:border-blue-300 hover:shadow-sm text-slate-700'
+                    }`}
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className={`h-7 w-7 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 ${selBatch?.id === b.id ? 'bg-white/20 text-white' : 'bg-blue-100 text-blue-700'}`}>
+                      {b.name.charAt(0).toUpperCase()}
+                    </span>
+                    <span className="truncate">{b.name}</span>
+                  </div>
+                  {selBatch?.id === b.id && <ChevronRight className="h-4 w-4 shrink-0 opacity-70" />}
+                </button>
+              ))}
+              {batches.length === 0 && (
+                <div className="text-center py-8 text-slate-400">
+                  <IndianRupee className="h-7 w-7 mx-auto mb-2 opacity-30" />
+                  <p className="text-xs">No batches</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* ════ COL 2: Student List ════ */}
+          <div className="w-80 border-r bg-gray-50 flex flex-col shrink-0">
+            {/* Header */}
+            <div className="px-3 py-3 border-b bg-white space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                  {selBatch ? `Students — ${selBatch.name}` : 'Students'}
+                </p>
+                {students.length > 0 && (
+                  <span className="text-[10px] font-bold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
+                    {students.length}
+                  </span>
+                )}
+              </div>
+              {selBatch && (
+                <>
+                  {/* Search */}
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-gray-400" />
+                    <input
+                      type="text"
+                      placeholder="Search name / ID…"
+                      value={studentSearch}
+                      onChange={e => setStudentSearch(e.target.value)}
+                      className="w-full pl-8 pr-3 py-1.5 text-xs border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                    />
+                  </div>
+                  {/* Filter tabs */}
+                  <div className="flex gap-1">
+                    {(['all', 'paid', 'partial', 'unpaid'] as const).map(f => (
+                      <button
+                        key={f}
+                        onClick={() => setStudentFilter(f)}
+                        className={`flex-1 py-1 text-[9px] font-bold rounded-lg border transition-all ${studentFilter === f
+                          ? f === 'all' ? 'bg-blue-600 text-white border-blue-600'
+                            : f === 'paid' ? 'bg-emerald-500 text-white border-emerald-500'
+                              : f === 'partial' ? 'bg-amber-400 text-white border-amber-400'
+                                : 'bg-red-500 text-white border-red-500'
+                          : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
+                          }`}
+                      >
+                        {f.toUpperCase()}
+                        <span className="block text-[8px] opacity-80">
+                          {studentCounts[f]}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Student Cards */}
+            <div className="flex-1 overflow-y-auto">
+              {!selBatch ? (
+                <div className="flex flex-col items-center justify-center h-full text-slate-400 px-4">
+                  <IndianRupee className="h-10 w-10 mb-2 opacity-20" />
+                  <p className="text-xs text-center">← Select a batch to see students</p>
+                </div>
+              ) : loadingStudents ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-7 w-7 animate-spin text-blue-400" />
+                </div>
+              ) : students.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-full text-slate-400 px-4">
+                  <User className="h-10 w-10 mb-2 opacity-20" />
+                  <p className="text-xs text-center">No fee records found in this batch</p>
+                </div>
+              ) : filteredStudents.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-full text-slate-400 px-4">
+                  <Filter className="h-8 w-8 mb-2 opacity-20" />
+                  <p className="text-xs text-center">No students match filter</p>
+                </div>
+              ) : (
+                <div className="p-2 space-y-1.5">
+                  {filteredStudents.map(s => {
+                    const sel = selStudent?.id === s.id;
+                    const pct = s.total_fee > 0 ? Math.round((s.paid_amount / s.total_fee) * 100) : 0;
+                    return (
+                      <button
+                        key={s.id}
+                        onClick={() => { setSelStudent(s); setStep('form'); }}
+                        className={`w-full text-left rounded-xl border p-3 transition-all group ${sel
+                          ? 'bg-blue-600 border-blue-600 shadow-lg ring-2 ring-blue-300'
+                          : 'bg-white border-gray-200 hover:border-blue-300 hover:shadow-md'
+                          }`}
+                      >
+                        {/* Row 1: Name + Status */}
+                        <div className="flex items-start justify-between gap-1 mb-1.5">
+                          <div className="min-w-0">
+                            <p className={`font-bold text-sm truncate leading-tight ${sel ? 'text-white' : 'text-gray-900'}`}>
+                              {s.student_name}
+                            </p>
+                            <p className={`font-mono text-[10px] mt-0.5 ${sel ? 'text-blue-200' : 'text-gray-400'}`}>
+                              {s.student_code}
+                            </p>
+                          </div>
+                          <StudentStatusPill status={s.status} />
+                        </div>
+
+                        {/* Progress bar */}
+                        {s.total_fee > 0 && (
+                          <div className={`w-full rounded-full h-1.5 mb-2 ${sel ? 'bg-white/20' : 'bg-gray-100'}`}>
+                            <div
+                              className={`h-1.5 rounded-full transition-all ${s.status === 'paid' ? 'bg-emerald-400' : s.status === 'partial' ? 'bg-amber-400' : 'bg-red-400'}`}
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                        )}
+
+                        {/* Row 2: Amounts */}
+                        <div className={`flex justify-between text-[10px] font-semibold ${sel ? 'text-blue-100' : 'text-gray-500'}`}>
+                          <span>Paid: <span className={sel ? 'text-green-300' : 'text-emerald-600'}>{fmtRs(s.paid_amount)}</span></span>
+                          <span>Due: <span className={sel ? 'text-yellow-200' : 'text-red-500'}>{fmtRs(s.pending_amount)}</span></span>
+                        </div>
+                        {s.total_fee > 0 && (
+                          <p className={`text-[9px] mt-0.5 ${sel ? 'text-blue-200' : 'text-gray-400'}`}>
+                            {pct}% of {fmtRs(s.total_fee)}
+                          </p>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* ════ COL 3: Invoice Form ════ */}
+          <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+            {!selStudent ? (
+              <div className="flex-1 flex items-center justify-center bg-slate-50">
+                <div className="text-center px-6">
+                  <div className="h-20 w-20 rounded-2xl bg-blue-50 border-2 border-blue-100 flex items-center justify-center mx-auto mb-4">
+                    <FileText className="h-9 w-9 text-blue-300" />
+                  </div>
+                  <p className="font-bold text-gray-700 text-base">No Student Selected</p>
+                  <p className="text-sm text-gray-400 mt-1">← Select a batch, then a student<br />to generate their invoice</p>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="flex-1 overflow-y-auto p-5 space-y-4">
+
+                  {/* ── Auto-generated IDs Banner ── */}
+                  <div className="bg-gradient-to-br from-slate-800 to-slate-700 rounded-2xl p-4 text-white">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Auto-Generated Invoice Details</p>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="bg-white/10 rounded-xl p-3">
+                        <p className="text-[9px] text-blue-300 font-bold uppercase tracking-wider mb-1">Invoice No</p>
+                        <p className="font-mono font-bold text-white text-xs break-all leading-tight">{invoiceNo}</p>
+                        <div className="flex items-center gap-1 mt-2">
+                          <span className="text-[9px] text-slate-400">Auto · Unique</span>
+                        </div>
+                      </div>
+                      <div className="bg-white/10 rounded-xl p-3">
+                        <p className="text-[9px] text-purple-300 font-bold uppercase tracking-wider mb-1">Transfer ID</p>
+                        <p className="font-mono font-bold text-white text-[10px] break-all leading-tight">{transferId}</p>
+                        <button
+                          onClick={() => setTransferId(genTransferId())}
+                          className="flex items-center gap-1 mt-2 text-[9px] text-slate-400 hover:text-white transition"
+                        >
+                          <RefreshCw className="h-2.5 w-2.5" /> Regenerate
+                        </button>
+                      </div>
+                      <div className="bg-amber-500/20 border border-amber-500/30 rounded-xl p-3 flex flex-col items-center justify-center">
+                        <p className="text-[9px] text-amber-300 font-bold uppercase tracking-wider mb-1">Installment #</p>
+                        <p className="font-black text-amber-300 text-4xl leading-none">{nextInstallment}</p>
+                        <p className="text-[9px] text-slate-400 mt-1">Auto-counted</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* ── Student Summary Card ── */}
+                  <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-2xl p-4">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="h-11 w-11 rounded-xl bg-white/20 flex items-center justify-center font-black text-lg shrink-0">
+                        {selStudent.student_name.charAt(0)}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-bold text-base truncate">{selStudent.student_name}</p>
+                        <p className="text-blue-200 font-mono text-xs">{selStudent.student_code} · {selStudent.batch_name}</p>
+                      </div>
+                      <div className="ml-auto shrink-0">
+                        <StudentStatusPill status={selStudent.status} />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="bg-white/10 rounded-xl py-2.5 px-3">
+                        <p className="text-[9px] text-blue-200 font-semibold uppercase">Total Fee</p>
+                        <p className="font-bold text-sm mt-0.5">{fmtRs(selStudent.total_fee)}</p>
+                      </div>
+                      <div className="bg-white/10 rounded-xl py-2.5 px-3">
+                        <p className="text-[9px] text-blue-200 font-semibold uppercase">Paid</p>
+                        <p className="font-bold text-sm mt-0.5 text-green-300">{fmtRs(selStudent.paid_amount)}</p>
+                      </div>
+                      <div className="bg-white/10 rounded-xl py-2.5 px-3">
+                        <p className="text-[9px] text-blue-200 font-semibold uppercase">Pending</p>
+                        <p className="font-bold text-sm mt-0.5 text-yellow-300">{fmtRs(selStudent.pending_amount)}</p>
+                      </div>
+                    </div>
+                    {selStudent.total_fee > 0 && (
+                      <div className="mt-3">
+                        <div className="w-full bg-white/20 rounded-full h-2">
+                          <div
+                            className="h-2 rounded-full bg-emerald-400 transition-all"
+                            style={{ width: `${Math.round((selStudent.paid_amount / selStudent.total_fee) * 100)}%` }}
+                          />
+                        </div>
+                        <p className="text-[9px] text-blue-200 mt-1">
+                          {Math.round((selStudent.paid_amount / selStudent.total_fee) * 100)}% of total fee paid
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* ── Amount Input ── */}
+                  <div>
+                    <Label htmlFor="inv-amount" className="text-sm font-bold text-gray-800">
+                      Payment Amount (₹) <span className="text-red-500">*</span>
+                    </Label>
+                    <p className="text-xs text-gray-400 mt-0.5 mb-2">
+                      Pending due: <strong className="text-red-600">{fmtRs(selStudent.pending_amount)}</strong>
+                    </p>
+                    <div className="relative">
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-black text-xl">₹</span>
+                      <Input
+                        id="inv-amount"
+                        type="number"
+                        min="1"
+                        max={selStudent.pending_amount || undefined}
+                        className="pl-10 text-2xl font-black h-14 border-2 border-gray-200 focus:border-blue-400 rounded-xl"
+                        placeholder={selStudent.pending_amount > 0 ? selStudent.pending_amount.toString() : '0'}
+                        value={form.amount}
+                        onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
+                      />
+                    </div>
+                    {form.amount && !isNaN(parseFloat(form.amount)) && (
+                      <div className="mt-2 flex gap-3 text-xs">
+                        <span className="bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-lg border border-emerald-200 font-semibold">
+                          After this: Paid = {fmtRs(selStudent.paid_amount + parseFloat(form.amount))}
+                        </span>
+                        <span className="bg-red-50 text-red-600 px-2.5 py-1 rounded-lg border border-red-200 font-semibold">
+                          Remaining = {fmtRs(Math.max(0, selStudent.pending_amount - parseFloat(form.amount)))}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* ── Received By Admin ── */}
+                  <div>
+                    <Label className="text-sm font-bold text-gray-800">
+                      Admin Who Received Cash <span className="text-red-500">*</span>
+                    </Label>
+                    <p className="text-xs text-gray-400 mt-0.5 mb-2">Select from your admin team (ID auto-logged)</p>
+                    {admins.length === 0 ? (
+                      <p className="text-sm text-amber-600 bg-amber-50 px-3 py-2 rounded-lg border border-amber-200">
+                        No admins loaded — check the <code>admins</code> table.
+                      </p>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-2">
+                        {admins.map(a => (
+                          <button
+                            key={a.admin_id}
+                            type="button"
+                            onClick={() => setReceivedByAdminId(a.admin_id)}
+                            className={`text-left px-3 py-2.5 rounded-xl border-2 transition-all ${receivedByAdminId === a.admin_id
+                              ? 'bg-emerald-600 text-white border-emerald-600 shadow-md'
+                              : 'bg-white border-gray-200 hover:border-emerald-400 hover:shadow-sm'
+                              }`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <div className={`h-7 w-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${receivedByAdminId === a.admin_id ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-700'}`}>
+                                {a.display_name.charAt(0)}
+                              </div>
+                              <div className="min-w-0">
+                                <p className={`font-semibold text-sm truncate ${receivedByAdminId === a.admin_id ? 'text-white' : 'text-gray-800'}`}>
+                                  {a.display_name}
+                                </p>
+                                <p className={`font-mono text-[10px] ${receivedByAdminId === a.admin_id ? 'text-emerald-100' : 'text-gray-400'}`}>
+                                  {a.admin_id}
+                                </p>
+                              </div>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* ── Recorded By (auto) ── */}
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-center gap-3">
+                    <div className="h-8 w-8 rounded-full bg-amber-200 flex items-center justify-center shrink-0">
+                      <User className="h-4 w-4 text-amber-700" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-amber-600 font-bold uppercase tracking-wider">Invoice Recorded By (Auto)</p>
+                      <p className="text-sm font-bold text-amber-800 mt-0.5">
+                        {adminInfo?.name} <span className="font-mono text-xs font-normal">({adminInfo?.admin_id})</span>
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* ── Bank, Date, Notes ── */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label htmlFor="inv-bank" className="text-sm font-semibold">
+                        <Banknote className="inline h-3.5 w-3.5 mr-1 text-gray-400" />
+                        Bank / Payment Mode
+                      </Label>
+                      <Input
+                        id="inv-bank"
+                        className="mt-1"
+                        placeholder="SBI, HDFC, Cash…"
+                        value={form.bank_name}
+                        onChange={e => setForm(f => ({ ...f, bank_name: e.target.value }))}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="inv-date" className="text-sm font-semibold">Payment Date</Label>
+                      <Input
+                        id="inv-date"
+                        type="date"
+                        className="mt-1"
+                        value={form.payment_date}
+                        onChange={e => setForm(f => ({ ...f, payment_date: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <Label htmlFor="inv-notes" className="text-sm font-semibold">Notes (Optional)</Label>
+                    <Input
+                      id="inv-notes"
+                      className="mt-1"
+                      placeholder="Any additional notes…"
+                      value={form.notes}
+                      onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+                    />
+                  </div>
+                </div>
+
+                {/* ── Footer Actions ── */}
+                <div className="px-5 py-4 border-t bg-gray-50 flex items-center justify-between gap-3 shrink-0">
+                  <Button variant="outline" size="sm" onClick={onClose} disabled={saving}>Cancel</Button>
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={() => handleSave(false)}
+                      disabled={saving}
+                      variant="outline"
+                      size="sm"
+                      className="gap-1.5 border-blue-400 text-blue-700 hover:bg-blue-50 font-semibold"
+                    >
+                      {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                      Save Only
+                    </Button>
+                    <Button
+                      onClick={() => handleSave(true)}
+                      disabled={saving}
+                      className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-md font-semibold"
+                    >
+                      {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />}
+                      Save &amp; View Invoice
+                    </Button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 const AdminFeeManagement: React.FC = () => {
   const navigate = useNavigate();
@@ -329,18 +916,8 @@ const AdminFeeManagement: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'paid' | 'partial' | 'unpaid'>('all');
 
-  // Invoice dialog
+  // Invoice modal
   const [invoiceOpen, setInvoiceOpen] = useState(false);
-  const [invBatch, setInvBatch] = useState<Batch | null>(null);
-  const [invStudents, setInvStudents] = useState<FeeRecord[]>([]);
-  const [invStudent, setInvStudent] = useState<FeeRecord | null>(null);
-  const [invLoadingStudents, setInvLoadingStudents] = useState(false);
-  const [invNextInstallment, setInvNextInstallment] = useState(1);
-  const [invInvoiceNo, setInvInvoiceNo] = useState('');
-  const [invTransferId, setInvTransferId] = useState('');
-  const [invReceivedByAdminId, setInvReceivedByAdminId] = useState('');
-  const [invForm, setInvForm] = useState({ amount: '', bank_name: '', payment_date: new Date().toISOString().slice(0, 10), notes: '' });
-  const [invSaving, setInvSaving] = useState(false);
 
   // Invoice preview
   const [previewInv, setPreviewInv] = useState<InvoiceData | null>(null);
@@ -378,47 +955,6 @@ const AdminFeeManagement: React.FC = () => {
     }
   }, [payDialog]);
 
-  // ── Invoice dialog open: set batch & regenerate IDs ──
-  useEffect(() => {
-    if (invoiceOpen) {
-      setInvInvoiceNo(genInvoiceNo());
-      setInvTransferId(genTransferId());
-      setInvReceivedByAdminId('');
-      setInvForm({ amount: '', bank_name: '', payment_date: new Date().toISOString().slice(0, 10), notes: '' });
-      setInvStudent(null);
-      // Pre-select current batch if viewing one
-      const target = selectedBatch || null;
-      setInvBatch(target);
-    }
-  }, [invoiceOpen, selectedBatch]);
-
-  // ── Load students when invBatch changes ──
-  useEffect(() => {
-    if (!invBatch) { setInvStudents([]); setInvStudent(null); return; }
-    setInvLoadingStudents(true);
-    setInvStudent(null);
-    supabase.from('fee_records')
-      .select('id, student_id, batch_id, total_fee, paid_amount, students(student_code, users(name)), batches(name)')
-      .eq('batch_id', invBatch.id)
-      .then(({ data, error }) => {
-        if (!error) {
-          setInvStudents(((data as any[]) ?? []).map((r) => {
-            const paid = r.paid_amount ?? 0, total = r.total_fee ?? 0, pending = Math.max(0, total - paid);
-            const status: FeeRecord['status'] = paid >= total && total > 0 ? 'paid' : paid > 0 ? 'partial' : 'unpaid';
-            return { id: r.id, student_id: r.student_id, student_name: r.students?.users?.name ?? 'Unknown', student_code: r.students?.student_code ?? '—', batch_id: r.batch_id, batch_name: r.batches?.name ?? '—', total_fee: total, paid_amount: paid, pending_amount: pending, status };
-          }));
-        }
-        setInvLoadingStudents(false);
-      });
-  }, [invBatch]);
-
-  // ── Load next installment number when student changes ──
-  useEffect(() => {
-    if (!invStudent) { setInvNextInstallment(1); return; }
-    supabase.from('fee_payments').select('id', { count: 'exact', head: true }).eq('fee_record_id', invStudent.id)
-      .then(({ count }) => setInvNextInstallment((count ?? 0) + 1));
-  }, [invStudent]);
-
   // ── Loaders ───────────────────────────────────────────────────────────────
   const loadAdmins = async () => {
     const { data } = await supabase.from('admins').select('admin_id, display_name, email').eq('enabled', true);
@@ -451,10 +987,10 @@ const AdminFeeManagement: React.FC = () => {
 
   const filtered = useMemo(() => {
     let list = feeRecords;
-    if (statusFilter !== 'all') list = list.filter((r) => r.status === statusFilter);
+    if (statusFilter !== 'all') list = list.filter(r => r.status === statusFilter);
     if (searchTerm.trim()) {
       const q = searchTerm.toLowerCase();
-      list = list.filter((r) => r.student_name.toLowerCase().includes(q) || r.student_code.toLowerCase().includes(q));
+      list = list.filter(r => r.student_name.toLowerCase().includes(q) || r.student_code.toLowerCase().includes(q));
     }
     return list;
   }, [feeRecords, statusFilter, searchTerm]);
@@ -463,51 +999,10 @@ const AdminFeeManagement: React.FC = () => {
     total: feeRecords.reduce((a, r) => a + r.total_fee, 0),
     collected: feeRecords.reduce((a, r) => a + r.paid_amount, 0),
     pending: feeRecords.reduce((a, r) => a + r.pending_amount, 0),
-    paidCount: feeRecords.filter((r) => r.status === 'paid').length,
-    partialCount: feeRecords.filter((r) => r.status === 'partial').length,
-    unpaidCount: feeRecords.filter((r) => r.status === 'unpaid').length,
+    paidCount: feeRecords.filter(r => r.status === 'paid').length,
+    partialCount: feeRecords.filter(r => r.status === 'partial').length,
+    unpaidCount: feeRecords.filter(r => r.status === 'unpaid').length,
   }), [feeRecords]);
-
-  // ── Save Invoice ──────────────────────────────────────────────────────────
-  const handleSaveInvoice = async (withPreview: boolean) => {
-    if (!invStudent || !adminInfo) return;
-    const amount = parseFloat(invForm.amount);
-    if (!amount || amount <= 0) { toast({ title: 'Enter a valid amount', variant: 'destructive' }); return; }
-    if (!invReceivedByAdminId) { toast({ title: 'Select the admin who received cash', variant: 'destructive' }); return; }
-    const receivedAdmin = admins.find((a) => a.admin_id === invReceivedByAdminId);
-    try {
-      setInvSaving(true);
-      const { error: payErr } = await supabase.from('fee_payments').insert([{
-        fee_record_id: invStudent.id, invoice_no: invInvoiceNo, transfer_id: invTransferId,
-        installment_no: invNextInstallment, amount,
-        bank_name: invForm.bank_name.trim() || null,
-        received_by: receivedAdmin?.display_name ?? invReceivedByAdminId,
-        received_by_admin_id: invReceivedByAdminId,
-        payment_date: invForm.payment_date,
-        notes: invForm.notes.trim() || null,
-        added_by_admin_id: adminInfo.admin_id, added_by_admin_name: adminInfo.name,
-      }]);
-      if (payErr) throw payErr;
-      await supabase.from('fee_records').update({ paid_amount: invStudent.paid_amount + amount }).eq('id', invStudent.id);
-      toast({ title: '✅ Invoice Saved', description: `${invInvoiceNo} | Installment #${invNextInstallment}` });
-      if (withPreview) {
-        setPreviewInv({
-          invoice_no: invInvoiceNo, transfer_id: invTransferId, installment_no: invNextInstallment,
-          student: invStudent, amount, bank_name: invForm.bank_name || 'Cash (Offline)',
-          received_by_admin_name: receivedAdmin?.display_name ?? invReceivedByAdminId,
-          received_by_admin_id: invReceivedByAdminId,
-          recorded_by_admin_name: adminInfo.name,
-          payment_date: invForm.payment_date, notes: invForm.notes,
-        });
-      }
-      setInvoiceOpen(false);
-      if (selectedBatch) loadFeeRecords(selectedBatch.id);
-      setInvBatch(null); setInvStudent(null);
-      setInvForm({ amount: '', bank_name: '', payment_date: new Date().toISOString().slice(0, 10), notes: '' });
-    } catch (err: any) {
-      toast({ title: 'Error', description: err?.message, variant: 'destructive' });
-    } finally { setInvSaving(false); }
-  };
 
   // ── Quick Record Payment ──────────────────────────────────────────────────
   const handleSavePayment = async () => {
@@ -575,7 +1070,8 @@ const AdminFeeManagement: React.FC = () => {
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <Button onClick={() => setInvoiceOpen(true)}
+              <Button
+                onClick={() => setInvoiceOpen(true)}
                 className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
               >
                 <Receipt className="h-4 w-4" /> Generate Invoice
@@ -639,7 +1135,7 @@ const AdminFeeManagement: React.FC = () => {
                 { label: 'Fully Paid', value: stats.paidCount, color: 'text-emerald-700', bg: 'bg-emerald-50' },
                 { label: 'Partial', value: stats.partialCount, color: 'text-amber-700', bg: 'bg-amber-50' },
                 { label: 'Unpaid', value: stats.unpaidCount, color: 'text-red-600', bg: 'bg-red-50' },
-              ].map((s) => (
+              ].map(s => (
                 <Card key={s.label} className={`${s.bg} border shadow-none`}>
                   <CardContent className="p-4">
                     <p className="text-xs text-gray-500 mb-1">{s.label}</p>
@@ -654,10 +1150,10 @@ const AdminFeeManagement: React.FC = () => {
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
                 <Input placeholder="Search by name or student ID…" className="pl-9 bg-white"
-                  value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                  value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
               </div>
               <div className="flex gap-2">
-                {(['all', 'paid', 'partial', 'unpaid'] as const).map((s) => (
+                {(['all', 'paid', 'partial', 'unpaid'] as const).map(s => (
                   <button key={s} onClick={() => setStatusFilter(s)}
                     className={`px-3 py-2 rounded-lg text-sm font-medium border transition ${statusFilter === s ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:border-blue-400'}`}
                   >{s.charAt(0).toUpperCase() + s.slice(1)}</button>
@@ -694,7 +1190,7 @@ const AdminFeeManagement: React.FC = () => {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {filtered.map((rec) => (
+                        {filtered.map(rec => (
                           <TableRow key={rec.id} className="hover:bg-gray-50">
                             <TableCell className="font-medium">{rec.student_name}</TableCell>
                             <TableCell><span className="font-mono text-xs bg-gray-100 px-2 py-0.5 rounded">{rec.student_code}</span></TableCell>
@@ -729,247 +1225,17 @@ const AdminFeeManagement: React.FC = () => {
         )}
       </div>
 
-      {/* ═══════════════════════════════════════════════════════
-           GENERATE INVOICE — TWO-PANEL MODAL
-      ═══════════════════════════════════════════════════════ */}
-      {invoiceOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[95vh] flex flex-col overflow-hidden">
-
-            {/* Header */}
-            <div className="bg-gradient-to-r from-blue-700 to-blue-600 text-white px-6 py-4 flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-3">
-                <Receipt className="h-6 w-6" />
-                <div>
-                  <h2 className="text-lg font-bold leading-tight">Generate Fee Invoice</h2>
-                  <p className="text-blue-200 text-xs">{INSTITUTE.name} · {invBatch?.name ?? 'Select a batch'}</p>
-                </div>
-              </div>
-              <button onClick={() => setInvoiceOpen(false)} className="p-1.5 rounded-lg hover:bg-white/20 transition">
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            {/* Body */}
-            <div className="flex flex-1 overflow-hidden">
-
-              {/* ── LEFT: Student List ── */}
-              <div className="w-80 border-r bg-gray-50 flex flex-col shrink-0">
-                {/* Batch selector (only if no batch pre-selected from main view) */}
-                {!selectedBatch && (
-                  <div className="p-3 border-b bg-white">
-                    <p className="text-xs font-semibold text-gray-500 mb-2">SELECT BATCH</p>
-                    <div className="flex flex-col gap-1.5">
-                      {batches.map((b) => (
-                        <button key={b.id} type="button" onClick={() => setInvBatch(b)}
-                          className={`text-left px-3 py-2 rounded-lg border text-sm font-medium transition ${invBatch?.id === b.id ? 'bg-blue-600 text-white border-blue-600' : 'bg-white border-gray-200 hover:border-blue-400 text-gray-700'}`}
-                        >{b.name}</button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Students */}
-                <div className="flex-1 overflow-y-auto">
-                  <div className="p-3 pb-1 flex items-center justify-between">
-                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                      {invBatch ? `Students — ${invBatch.name}` : 'Students'}
-                    </p>
-                    {invStudents.length > 0 && (
-                      <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">{invStudents.length}</span>
-                    )}
-                  </div>
-
-                  {invLoadingStudents ? (
-                    <div className="flex items-center justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-blue-400" /></div>
-                  ) : !invBatch ? (
-                    <div className="text-center py-8 text-gray-400">
-                      <IndianRupee className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                      <p className="text-xs">Select a batch above</p>
-                    </div>
-                  ) : invStudents.length === 0 ? (
-                    <div className="text-center py-8 text-gray-400 px-4">
-                      <User className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                      <p className="text-xs">No fee records in this batch yet</p>
-                    </div>
-                  ) : (
-                    <div className="p-2 space-y-1">
-                      {invStudents.map((s) => {
-                        const sel = invStudent?.id === s.id;
-                        return (
-                          <button key={s.id} type="button" onClick={() => setInvStudent(s)}
-                            className={`w-full text-left px-3 py-3 rounded-xl border transition-all ${sel ? 'bg-blue-600 border-blue-600 text-white shadow-md' : 'bg-white border-gray-200 hover:border-blue-300 hover:shadow-sm'}`}
-                          >
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="min-w-0">
-                                <p className={`font-semibold text-sm truncate ${sel ? 'text-white' : 'text-gray-900'}`}>{s.student_name}</p>
-                                <p className={`font-mono text-xs mt-0.5 ${sel ? 'text-blue-200' : 'text-gray-400'}`}>{s.student_code}</p>
-                              </div>
-                              <span className={`text-xs font-bold shrink-0 ${s.status === 'paid' ? (sel ? 'text-green-200' : 'text-emerald-600') : s.status === 'partial' ? (sel ? 'text-yellow-200' : 'text-amber-600') : (sel ? 'text-red-200' : 'text-red-500')}`}>
-                                {s.status === 'paid' ? '✓ Paid' : s.status === 'partial' ? '⬤ Partial' : '○ Unpaid'}
-                              </span>
-                            </div>
-                            <div className={`flex justify-between text-xs mt-2 ${sel ? 'text-blue-100' : 'text-gray-500'}`}>
-                              <span>Paid: {fmtRs(s.paid_amount)}</span>
-                              <span className={sel ? 'text-yellow-200 font-semibold' : 'text-red-500 font-semibold'}>Due: {fmtRs(s.pending_amount)}</span>
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* ── RIGHT: Payment Form ── */}
-              <div className="flex-1 flex flex-col overflow-hidden">
-                {!invStudent ? (
-                  <div className="flex-1 flex items-center justify-center text-gray-400">
-                    <div className="text-center">
-                      <Receipt className="h-12 w-12 mx-auto mb-3 opacity-20" />
-                      <p className="font-medium text-gray-500">Select a student to generate invoice</p>
-                      <p className="text-sm mt-1">← Choose from the list</p>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex-1 overflow-y-auto p-5 space-y-4">
-
-                    {/* Auto IDs */}
-                    <div className="grid grid-cols-3 gap-3">
-                      <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
-                        <p className="text-xs text-blue-500 font-semibold mb-1">Invoice No</p>
-                        <p className="font-mono font-bold text-blue-800 text-sm leading-tight">{invInvoiceNo}</p>
-                        <p className="text-xs text-blue-400 mt-1">Unique · Auto</p>
-                      </div>
-                      <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
-                        <p className="text-xs text-slate-500 font-semibold mb-1">Transfer ID</p>
-                        <p className="font-mono font-bold text-slate-700 text-xs break-all">{invTransferId}</p>
-                      </div>
-                      <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
-                        <p className="text-xs text-amber-600 font-semibold mb-1">Installment #</p>
-                        <p className="font-bold text-amber-800 text-2xl leading-none">{invNextInstallment}</p>
-                        <p className="text-xs text-amber-400 mt-1">Auto-counted</p>
-                      </div>
-                    </div>
-
-                    {/* Student summary */}
-                    <div className="bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl p-4">
-                      <div className="flex items-center gap-3 mb-3">
-                        <div className="h-10 w-10 rounded-full bg-white/20 flex items-center justify-center font-bold text-lg">
-                          {invStudent.student_name.charAt(0)}
-                        </div>
-                        <div>
-                          <p className="font-bold text-base">{invStudent.student_name}</p>
-                          <p className="text-blue-200 font-mono text-xs">{invStudent.student_code} · {invStudent.batch_name}</p>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-3 gap-2 text-center">
-                        <div className="bg-white/10 rounded-lg py-2"><p className="text-xs text-blue-200">Total Fee</p><p className="font-bold">{fmtRs(invStudent.total_fee)}</p></div>
-                        <div className="bg-white/10 rounded-lg py-2"><p className="text-xs text-blue-200">Paid</p><p className="font-bold text-green-300">{fmtRs(invStudent.paid_amount)}</p></div>
-                        <div className="bg-white/10 rounded-lg py-2"><p className="text-xs text-blue-200">Pending</p><p className="font-bold text-yellow-300">{fmtRs(invStudent.pending_amount)}</p></div>
-                      </div>
-                    </div>
-
-                    {/* Amount */}
-                    <div>
-                      <Label htmlFor="inv-amount" className="text-sm font-semibold">
-                        Amount Being Paid (₹) <span className="text-red-500">*</span>
-                      </Label>
-                      <div className="relative mt-1">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-lg">₹</span>
-                        <Input id="inv-amount" type="number" min="1" className="pl-8 text-xl font-bold h-12"
-                          placeholder={`e.g. 10000  (pending: ${invStudent.pending_amount.toLocaleString('en-IN')})`}
-                          value={invForm.amount}
-                          onChange={(e) => setInvForm((f) => ({ ...f, amount: e.target.value }))}
-                        />
-                      </div>
-                      {invForm.amount && !isNaN(parseFloat(invForm.amount)) && (
-                        <p className="text-xs text-gray-500 mt-1">
-                          After this: Paid = <strong>{fmtRs(invStudent.paid_amount + parseFloat(invForm.amount))}</strong> ·
-                          Remaining = <strong className="text-red-500">{fmtRs(Math.max(0, invStudent.pending_amount - parseFloat(invForm.amount)))}</strong>
-                        </p>
-                      )}
-                    </div>
-
-                    {/* Admin who received */}
-                    <div>
-                      <Label className="text-sm font-semibold">
-                        Admin Who Received Cash <span className="text-red-500">*</span>
-                      </Label>
-                      <p className="text-xs text-gray-400 mt-0.5 mb-2">Select from your admin team (ID auto-logged)</p>
-                      {admins.length === 0 ? (
-                        <p className="text-sm text-amber-600 bg-amber-50 px-3 py-2 rounded-lg border border-amber-200">
-                          No admins loaded — check the <code>admins</code> table.
-                        </p>
-                      ) : (
-                        <div className="grid grid-cols-2 gap-2">
-                          {admins.map((a) => (
-                            <button key={a.admin_id} type="button" onClick={() => setInvReceivedByAdminId(a.admin_id)}
-                              className={`text-left px-3 py-2.5 rounded-xl border transition ${invReceivedByAdminId === a.admin_id ? 'bg-emerald-600 text-white border-emerald-600 shadow' : 'bg-white border-gray-200 hover:border-emerald-400'}`}
-                            >
-                              <p className={`font-semibold text-sm ${invReceivedByAdminId === a.admin_id ? 'text-white' : 'text-gray-800'}`}>{a.display_name}</p>
-                              <p className={`font-mono text-xs ${invReceivedByAdminId === a.admin_id ? 'text-emerald-100' : 'text-gray-400'}`}>{a.admin_id}</p>
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Recorded by (auto) */}
-                    <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-center gap-3">
-                      <User className="h-4 w-4 text-amber-600 shrink-0" />
-                      <div>
-                        <p className="text-xs text-amber-600 font-medium">Invoice Recorded By (Auto)</p>
-                        <p className="text-sm font-semibold text-amber-800">{adminInfo?.name} <span className="font-mono text-xs">({adminInfo?.admin_id})</span></p>
-                      </div>
-                    </div>
-
-                    {/* Bank, Date, Notes */}
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <Label htmlFor="inv-bank">Bank / Payment Mode</Label>
-                        <Input id="inv-bank" className="mt-1" placeholder="SBI, HDFC, Cash…"
-                          value={invForm.bank_name} onChange={(e) => setInvForm((f) => ({ ...f, bank_name: e.target.value }))} />
-                      </div>
-                      <div>
-                        <Label htmlFor="inv-date">Payment Date</Label>
-                        <Input id="inv-date" type="date" className="mt-1"
-                          value={invForm.payment_date} onChange={(e) => setInvForm((f) => ({ ...f, payment_date: e.target.value }))} />
-                      </div>
-                    </div>
-                    <div>
-                      <Label htmlFor="inv-notes">Notes (Optional)</Label>
-                      <Input id="inv-notes" className="mt-1" placeholder="Any additional notes…"
-                        value={invForm.notes} onChange={(e) => setInvForm((f) => ({ ...f, notes: e.target.value }))} />
-                    </div>
-                  </div>
-                )}
-
-                {/* Footer */}
-                {invStudent && (
-                  <div className="px-5 py-4 border-t bg-gray-50 flex items-center justify-between gap-3 shrink-0">
-                    <Button variant="outline" size="sm" onClick={() => setInvoiceOpen(false)} disabled={invSaving}>Cancel</Button>
-                    <div className="flex gap-2">
-                      <Button onClick={() => handleSaveInvoice(false)} disabled={invSaving}
-                        variant="outline" size="sm" className="gap-1 border-blue-400 text-blue-700 hover:bg-blue-50"
-                      >
-                        {invSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                        Save Only
-                      </Button>
-                      <Button onClick={() => handleSaveInvoice(true)} disabled={invSaving}
-                        className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow"
-                      >
-                        {invSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />}
-                        Save &amp; View Invoice
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* ═══════════ GENERATE INVOICE MODAL ═══════════ */}
+      <GenerateInvoiceModal
+        open={invoiceOpen}
+        onClose={() => setInvoiceOpen(false)}
+        batches={batches}
+        admins={admins}
+        adminInfo={adminInfo}
+        preSelectedBatch={selectedBatch}
+        onSaved={() => { if (selectedBatch) loadFeeRecords(selectedBatch.id); }}
+        onPreview={inv => setPreviewInv(inv)}
+      />
 
       {/* ── Invoice Preview ── */}
       {previewInv && <InvoicePreviewModal inv={previewInv} onClose={() => setPreviewInv(null)} />}
@@ -1002,29 +1268,29 @@ const AdminFeeManagement: React.FC = () => {
               <div>
                 <Label htmlFor="pay-amt">Amount <span className="text-red-500">*</span></Label>
                 <Input id="pay-amt" type="number" min="1" className="mt-1" placeholder="₹"
-                  value={payForm.amount} onChange={(e) => setPayForm((f) => ({ ...f, amount: e.target.value }))} />
+                  value={payForm.amount} onChange={e => setPayForm(f => ({ ...f, amount: e.target.value }))} />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label htmlFor="pay-bank">Bank / Mode</Label>
                   <Input id="pay-bank" className="mt-1" placeholder="SBI, Cash…"
-                    value={payForm.bank_name} onChange={(e) => setPayForm((f) => ({ ...f, bank_name: e.target.value }))} />
+                    value={payForm.bank_name} onChange={e => setPayForm(f => ({ ...f, bank_name: e.target.value }))} />
                 </div>
                 <div>
                   <Label htmlFor="pay-recv">Received By <span className="text-red-500">*</span></Label>
                   <Input id="pay-recv" className="mt-1" placeholder="Person name"
-                    value={payForm.received_by} onChange={(e) => setPayForm((f) => ({ ...f, received_by: e.target.value }))} />
+                    value={payForm.received_by} onChange={e => setPayForm(f => ({ ...f, received_by: e.target.value }))} />
                 </div>
               </div>
               <div>
                 <Label htmlFor="pay-date">Date</Label>
                 <Input id="pay-date" type="date" className="mt-1"
-                  value={payForm.payment_date} onChange={(e) => setPayForm((f) => ({ ...f, payment_date: e.target.value }))} />
+                  value={payForm.payment_date} onChange={e => setPayForm(f => ({ ...f, payment_date: e.target.value }))} />
               </div>
               <div>
                 <Label htmlFor="pay-notes">Notes</Label>
                 <Input id="pay-notes" className="mt-1" placeholder="Optional…"
-                  value={payForm.notes} onChange={(e) => setPayForm((f) => ({ ...f, notes: e.target.value }))} />
+                  value={payForm.notes} onChange={e => setPayForm(f => ({ ...f, notes: e.target.value }))} />
               </div>
             </div>
             <DialogFooter className="gap-2 mt-2">
@@ -1049,7 +1315,7 @@ const AdminFeeManagement: React.FC = () => {
             <div className="py-2">
               <Label htmlFor="total-fee">Total Fee (₹)</Label>
               <Input id="total-fee" type="number" min="0" className="mt-2"
-                value={newTotalFee} onChange={(e) => setNewTotalFee(e.target.value)} placeholder="e.g. 50000" />
+                value={newTotalFee} onChange={e => setNewTotalFee(e.target.value)} placeholder="e.g. 50000" />
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setUpdateFeeDialog(null)} disabled={updatingFee}>Cancel</Button>

@@ -206,7 +206,7 @@ const AdminDashboard: React.FC = () => {
           </Card>
 
           {/* Admin Management Section */}
-          <Card className="hover:shadow-md transition-shadow cursor-pointer">
+          {/* <Card className="hover:shadow-md transition-shadow cursor-pointer">
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
                 <Shield className="h-5 w-5 text-indigo-600" />
@@ -219,7 +219,7 @@ const AdminDashboard: React.FC = () => {
                 Manage Admins
               </Button>
             </CardContent>
-          </Card>
+          </Card> */}
 
           <Card className="hover:shadow-md transition-shadow cursor-pointer">
             <CardHeader>
